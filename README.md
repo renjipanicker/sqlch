@@ -48,8 +48,8 @@ Using interfaces, you can define separate read-write and read-only interfaces to
 
 # Metacommands
 Metacommands can be specified within single or multiline comments.
-A multiline comment holding metacommands starts with a /** and ends with a **/
-A single line comment is preceeded by 3 hyphens.
+- A multiline comment holding metacommands starts with a /** and ends with a **/
+- A single line comment is preceeded by 3 hyphens.
 
 - **NAMESPACE**: This metacommand defines the namespace in which all generated classes should exist
 - **HCODE**: Defines any additional code (declarations, functions, etc) that should be inserted at the beginning of the header file
@@ -57,7 +57,8 @@ A single line comment is preceeded by 3 hyphens.
 - **INCLUDE**: Defines any header files that should be inserted at the beginning of the header file
 - **IMPORT**: Defines any header files that should be inserted at the beginning of the source file
 - **SQLCH**: Your app can have more than one .sql/.cpp/.hpp files. But the generated code contains a set of classes that are common across all the generated pairs of files, which will cause linker errors.  
-Use `SQLCH OFF` to turn off the generation of these common classes in all files except one.
+Use `SQLCH OFF` to turn off the generation of these common classes in all files except one.  
+Use `SQLCH <name>` to change the name of the namespace in which these common classes will be generated
 - **ON ERROR**: Define the function to be called on any error
 - **ON TRACE**: Define the function to be called to trace database access
 - **ON OPEN**: Define the function to be called before opening a database

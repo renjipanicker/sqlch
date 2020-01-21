@@ -6,6 +6,8 @@
 #include <map>
 #include <sqlite3.h>
 
+#define SQLCH_TRACE 0
+
 namespace {
     struct Variable {
         std::string name;
@@ -223,7 +225,7 @@ namespace {
         std::string offset;
 
         inline int authcb(int actioncode, const std::string& p3, const std::string& /*p4*/, const std::string& /*p5*/, const std::string& /*p6*/) {
-#if 0
+#if SQLCH_TRACE
             std::cout
                 << "AC_CODE:" << actioncode
                 << ", LAST_AC_CODE:" << last_actioncode
@@ -238,25 +240,25 @@ namespace {
                 last_actioncode = actioncode;
                 primary_table = p3;
             } else if(actioncode == SQLITE_CREATE_INDEX) {
-                if(p3 != "sqlite_master") {
-                    assert(last_actioncode == 0);
+                if(p3.substr(0,7) != "sqlite_") {
+                    assert((last_actioncode == 0) || (last_actioncode == SQLITE_CREATE_TABLE));
                     last_actioncode = actioncode;
                     primary_table = p3;
                 }
             } else if(actioncode == SQLITE_INSERT) {
-                if(p3 != "sqlite_master") {
+                if(p3.substr(0,7) != "sqlite_") {
                     assert(last_actioncode == 0);
                     last_actioncode = actioncode;
                     primary_table = p3;
                 }
             } else if(actioncode == SQLITE_UPDATE) {
-                if(p3 != "sqlite_master") {
+                if(p3.substr(0,7) != "sqlite_") {
                     assert((last_actioncode == 0) || (last_actioncode == actioncode));
                     last_actioncode = actioncode;
                     primary_table = p3;
                 }
             } else if(actioncode == SQLITE_DELETE) {
-                if(p3 != "sqlite_master") {
+                if(p3.substr(0,7) != "sqlite_") {
                     assert(last_actioncode == 0);
                     last_actioncode = actioncode;
                     primary_table = p3;
@@ -625,6 +627,9 @@ namespace {
     }
 
     inline void processSqlStatement(Parser& parser, const std::string& sql) {
+#if SQLCH_TRACE
+        std::cout << "processStatement:" << sql << std::endl;
+#endif
         Cursor cursor(parser);
         cursor.open(sql);
         cursor.next();
