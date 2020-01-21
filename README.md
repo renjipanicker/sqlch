@@ -17,6 +17,29 @@ sqlch test.sql
 clang++ -std=c++17 testmain.cpp test.cpp -lsqlite3 -o test
 ```
 
+NOTE: The sqlch executable is self-sufficient. In most cases, you won't need to "install" it on your system, or add it to your project. You will only need to copy the executable somewher on your PATH (say, /usr/local/bin) and invoke it from your project.
+
+# Invoking in CMAKE
+To generate the cpp/hpp files within a CMake project:
+1. Add a custom command to your CMakeLists.txt file, as follows:
+```
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test.cpp" "${CMAKE_CURRENT_BINARY_DIR}/test.hpp"
+    DEPENDS "test.sql"
+    COMMENT "generating database access files"
+    COMMAND sqlch -d ${CMAKE_CURRENT_BINARY_DIR}/ ${CMAKE_CURRENT_SOURCE_DIR}/test.sql
+)
+```
+2. Add the generated cpp file to your source list
+```
+set(TEST_SQLCH_SOURCE
+    testmain.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/test.cpp
+)
+
+add_executable(${PROJECT_NAME} ${TEST_SQLCH_SOURCE})
+```
+
 # Design
 - **Database**: This class holds all code to create, open and close the connection to the underlying database
 - **Interface**: This class holds a set of statements to access the database.  
@@ -49,4 +72,4 @@ Use `SQLCH OFF` to turn off the generation of these common classes in all files 
 
 
 # TODO
-- Need to implement cursors. At present, it returns a vector of rows returned.
+- Need to implement cursors. At present, a SELECT query returns a vector of rows.
