@@ -1,9 +1,11 @@
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <map>
+#include <assert.h>
 #include <sqlite3.h>
 
 #define SQLCH_TRACE 0
@@ -140,13 +142,15 @@ namespace {
         std::string hcode;
         std::string scode;
         std::vector<Database> dbList;
+        bool isAutoIncrement;
         inline Module(const std::string& n)
             : name(n)
             , generateBase("sqlch")
             , onError("on_Error")
             , onOpen("on_Open")
             , onOpened("on_Opened")
-            , decSql("") {}
+            , decSql("")
+            , isAutoIncrement(true) {}
 
         inline auto& addEnumType(const std::string& name) {
             enumList.emplace_back(name);
@@ -593,6 +597,15 @@ namespace {
             parser.nmap[vname] = tname;
             return true;
         }
+        if(tokList.at(0) == "AUTOINCREMENT") {
+            auto& state = tokList.at(1);
+            if(state == "OFF"){
+                parser.module.isAutoIncrement = false;
+            }else{
+                parser.module.isAutoIncrement = true;
+            }
+            return true;
+        }
         if(tokList.at(0) == "QNAME") {
             parser.qname = tokList.at(1);
             return true;
@@ -999,7 +1012,11 @@ namespace {
         std::string sep;
 
         of_hdr << "    " << module.generateBase << "::exstatement " << stmt.qname() << "_;" << std::endl;
-        of_hdr << "    " << stmt.pktype() << " " << stmt.qname() << "(";
+        if(module.isAutoIncrement){
+            of_hdr << "    " << stmt.pktype() << " " << stmt.qname() << "(";
+        }else{
+            of_hdr << "    void " << stmt.qname() << "(";
+        }
         for(auto& v : stmt.varList) {
             of_hdr << sep << "const " << v.ntype << "& " << v.name;
             sep = ", ";
@@ -1009,7 +1026,11 @@ namespace {
 
         auto fqname = ns + name + "::" + stmt.qname();
         sep = "";
-        of_src << stmt.pktype() << " " << fqname << "(";
+        if(module.isAutoIncrement){
+            of_src << stmt.pktype() << " " << fqname << "(";
+        }else{
+            of_src << "void " << fqname << "(";
+        }
         for(auto& v : stmt.varList) {
             of_src << sep << "const " << v.ntype << "& " << v.name;
             sep = ", ";
@@ -1017,11 +1038,11 @@ namespace {
         of_src << ") {" << std::endl;
         of_src << "  " << stmt.qname() << "_.reset();" << std::endl;
         for(auto& v : stmt.varList) {
-            auto ctype = "(" + v.ctype + ")";
+            auto ctype = "static_cast<" + v.ctype + ">";
             if(v.ntype == v.ctype) {
                 ctype = "";
             }
-            of_src << "  " << stmt.qname() << "_.setParam<" << v.ctype << ">(\":" << v.name << "\", " << ctype << v.name << ");" << std::endl;
+            of_src << "  " << stmt.qname() << "_.setParam<" << v.ctype << ">(\":" << v.name << "\", " << ctype << "(" << v.name << "));" << std::endl;
         }
         of_src << "  return " << stmt.qname() << "_.insert();" << std::endl;
         of_src << "}" << std::endl;
@@ -1086,7 +1107,7 @@ namespace {
             of_hdr << "      };" << std::endl;
         }
 
-        of_hdr << "      inline " << stmt.qname() << "_c(" << module.generateBase << "::database& db) : statement(db) {}" << std::endl;
+        of_hdr << "      inline " << stmt.qname() << "_c(" << module.generateBase << "::database& pdb) : statement(pdb) {}" << std::endl;
         of_hdr << "    };" << std::endl;
         of_hdr << "    " << stmt.qname() << "_c " << stmt.qname() << "_;" << std::endl;
 
@@ -1124,11 +1145,11 @@ namespace {
         of_src << "    auto& s = rv.back();" << std::endl;
         size_t idx = 0;
         for(auto& c : stmt.colList) {
-            auto ntype = "(" + c.ntype + ")";
+            auto ntype = "static_cast<" + c.ntype + ">";
             if(c.ntype == c.ctype) {
                 ntype = "";
             }
-            of_src << "    s." << c.cname << " = " << ntype << stmt.qname() << "_.getColumn<" << c.ctype << ">(" << idx << ");" << std::endl;
+            of_src << "    s." << c.cname << " = " << ntype << "(" << stmt.qname() << "_.getColumn<" << c.ctype << ">(" << idx << "));" << std::endl;
             ++idx;
         }
         of_src << "  }" << std::endl;
@@ -1174,9 +1195,9 @@ namespace {
         }
 
         if(isDB) {
-            of_hdr << "    void create(const std::string& filename, const char* vfs = 0);" << std::endl;
-            of_hdr << "    void openrw(const std::string& filename, const char* vfs = 0);" << std::endl;
-            of_hdr << "    void openro(const std::string& filename, const char* vfs = 0);" << std::endl;
+            of_hdr << "    void create(const std::string& filename, const char* vfs = nullptr);" << std::endl;
+            of_hdr << "    void openrw(const std::string& filename, const char* vfs = nullptr);" << std::endl;
+            of_hdr << "    void openro(const std::string& filename, const char* vfs = nullptr);" << std::endl;
         } else {
             of_hdr << "    void open();" << std::endl;
         }
@@ -1342,7 +1363,11 @@ namespace {
             of_hdr << "    void open(const std::string& sql);" << std::endl;
             of_hdr << "    void close();" << std::endl;
             of_hdr << "    bool next();" << std::endl;
-            of_hdr << "    uint64_t insert();" << std::endl;
+            if(module.isAutoIncrement){
+                of_hdr << "    uint64_t insert();" << std::endl;
+            }else{
+                of_hdr << "    void insert();" << std::endl;
+            }
             of_hdr << "    void xdelete();" << std::endl;
             of_hdr << "    void reset();" << std::endl;
             of_hdr << "    size_t getColumnCount();" << std::endl;
@@ -1383,8 +1408,6 @@ namespace {
             //    of_hdr << "    std::mutex mx_;" << std::endl;
             //    of_hdr << "#endif //" << module.mutexName << std::endl;
             //}
-            of_hdr << "    inline database() : val_(nullptr), beginTx_(*this), commitTx_(*this) {}" << std::endl;
-            of_hdr << "    inline ~database() {close();}" << std::endl;
             of_hdr << "    inline database(const database&) = delete;" << std::endl;
             of_hdr << "    inline database(database&&) = delete;" << std::endl;
             of_hdr << "    void open(const std::string& filename, const int& flags, const char* vfs);" << std::endl;
@@ -1397,6 +1420,8 @@ namespace {
             of_hdr << "    inline void openrw(const std::string& filename, const char* vfs){open(filename, SQLITE_OPEN_READWRITE, vfs);}" << std::endl;
             of_hdr << "    inline auto isOpen() {return (val_ != nullptr);}" << std::endl;
             of_hdr << "    inline auto& filename() const {return filename_;}" << std::endl;
+            of_hdr << "    inline database() : val_(nullptr), beginTx_(*this), commitTx_(*this) {}" << std::endl;
+            of_hdr << "    inline ~database() {close();}" << std::endl;
             of_hdr << "  };" << std::endl;
             of_hdr << std::endl;
 
@@ -1634,12 +1659,12 @@ namespace {
                 of_src << "  ::sqlite3_config(SQLITE_CONFIG_SINGLETHREAD);" << std::endl;
                 of_src << "#endif //" << module.mutexName << std::endl;
             }
-            of_src << "  if (val_ != 0) {close();}" << std::endl;
+            of_src << "  if (val_ != nullptr) {close();}" << std::endl;
             of_src << "  " << module.onOpen << "(filename, flags);" << std::endl;
             of_src << "  int rc = ::sqlite3_open_v2(filename.c_str(), &val_, flags, vfs);" << std::endl;
             of_src << "  if (rc != SQLITE_OK) {" << std::endl;
             of_src << "    rc=" << module.onError << "(filename, \"open_db:\" + filename, rc, error(val_));" << std::endl;
-            of_src << "    val_ = 0;" << std::endl;
+            of_src << "    val_ = nullptr;" << std::endl;
             of_src << "    return;" << std::endl;
             of_src << "  }" << std::endl;
 
@@ -1668,14 +1693,14 @@ namespace {
             of_src << "      " << module.onError << "(filename_, \"close_db\", rc, error(val_));" << std::endl;
             of_src << "    }" << std::endl;
             of_src << "  }" << std::endl;
-            of_src << "  val_ = 0;" << std::endl;
+            of_src << "  val_ = nullptr;" << std::endl;
             of_src << "  filename_ = \"\";" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
             of_src << "void " << module.generateBase << "::database::exec(const std::string& sqls){" << std::endl;
-            of_src << "  char* err = 0;" << std::endl;
-            of_src << "  int rc = sqlite3_exec(val_, sqls.c_str(), 0, 0, &err);" << std::endl;
+            of_src << "  char* err = nullptr;" << std::endl;
+            of_src << "  int rc = sqlite3_exec(val_, sqls.c_str(), nullptr, nullptr, &err);" << std::endl;
             of_src << "  if (rc != SQLITE_OK) {" << std::endl;
             of_src << "    std::string msg(err);" << std::endl;
             of_src << "    sqlite3_free(err);" << std::endl;
@@ -1689,7 +1714,7 @@ namespace {
             of_src << "    " << module.onError << "(db_.filename_, \"prepare\", SQLITE_MISUSE, \"[\" + sql + \"]:database not open\");" << std::endl;
             of_src << "    return;" << std::endl;
             of_src << "  }" << std::endl;
-            of_src << "  int rc = ::sqlite3_prepare_v2(db_.val_, sql.c_str(), -1, &(val_), 0);" << std::endl;
+            of_src << "  int rc = ::sqlite3_prepare_v2(db_.val_, sql.c_str(), -1, &(val_), nullptr);" << std::endl;
             of_src << "  if(rc != SQLITE_OK){" << std::endl;
             of_src << "    " << module.onError << "(db_.filename_, \"prepare\", rc, \"[\" + sql + \"]:\" + error(db_.val_));" << std::endl;
             of_src << "    return;" << std::endl;
@@ -1703,7 +1728,7 @@ namespace {
             of_src << "    ::sqlite3_clear_bindings(val_);" << std::endl;
             of_src << "    ::sqlite3_finalize(val_);" << std::endl;
             of_src << "  }" << std::endl;
-            of_src << "  val_ = 0;" << std::endl;
+            of_src << "  val_ = nullptr;" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
@@ -1716,11 +1741,18 @@ namespace {
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "uint64_t " << module.generateBase << "::statement::insert(){" << std::endl;
-            of_src << "  next();" << std::endl;
-            of_src << "  return (uint64_t)::sqlite3_last_insert_rowid(db_.val_);" << std::endl;
-            of_src << "}" << std::endl;
-            of_src << std::endl;
+            if(module.isAutoIncrement){
+                of_src << "uint64_t " << module.generateBase << "::statement::insert(){" << std::endl;
+                of_src << "  next();" << std::endl;
+                of_src << "  return (uint64_t)::sqlite3_last_insert_rowid(db_.val_);" << std::endl;
+                of_src << "}" << std::endl;
+                of_src << std::endl;
+            }else{
+                of_src << "void " << module.generateBase << "::statement::insert(){" << std::endl;
+                of_src << "  next();" << std::endl;
+                of_src << "}" << std::endl;
+                of_src << std::endl;
+            }
 
             of_src << "void " << module.generateBase << "::statement::xdelete(){" << std::endl;
             of_src << "  next();" << std::endl;
@@ -1736,7 +1768,7 @@ namespace {
             of_src << std::endl;
 
             of_src << "size_t " << module.generateBase << "::statement::getColumnCount(){" << std::endl;
-            of_src << "  return (size_t)::sqlite3_column_count(val_);" << std::endl;
+            of_src << "  return static_cast<size_t>(::sqlite3_column_count(val_));" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
@@ -1766,17 +1798,21 @@ namespace {
 
             of_src << "void " << module.generateBase << "::statement::setParamText(const std::string& key, const std::string& val){" << std::endl;
             of_src << "  int idx = getParamIndex(*this, key);" << std::endl;
-            of_src << "  ::sqlite3_bind_text(val_, idx, val.c_str(), (int)val.length(), SQLITE_TRANSIENT);" << std::endl;
+            of_src << "#pragma clang diagnostic push" << std::endl;
+            of_src << "#pragma clang diagnostic ignored \"-Wold-style-cast\"" << std::endl;
+            of_src << "  ::sqlite3_bind_text(val_, idx, val.c_str(), static_cast<int>(val.length()), SQLITE_TRANSIENT);" << std::endl;
+            of_src << "#pragma clang diagnostic pop" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
             of_src << "std::string " << module.generateBase << "::statement::getColumnText(const int& idx){" << std::endl;
             of_src << "  int len = ::sqlite3_column_bytes(val_, idx);" << std::endl;
-            of_src << "  const char* val = (const char*)::sqlite3_column_text(val_, idx);" << std::endl;
+            of_src << "  const void* valp = static_cast<const void*>(::sqlite3_column_text(val_, idx));" << std::endl;
+            of_src << "  const char* val = static_cast<const char*>(valp);" << std::endl;
             of_src << "  if (val == nullptr) {" << std::endl;
             of_src << "    " << module.onError << "(db_.filename_, \"get_text\", SQLITE_ERROR, error(db_.val_));" << std::endl;
             of_src << "  }" << std::endl;
-            of_src << "  return std::string(val, (size_t)len);" << std::endl;
+            of_src << "  return std::string(val, static_cast<size_t>(len));" << std::endl;
             of_src << "}" << std::endl;
         }
         of_src << std::endl;
