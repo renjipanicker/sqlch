@@ -128,7 +128,8 @@ namespace {
 
     struct Module {
         std::string name;
-        std::string generateBase;
+        bool generateBase;
+        std::string generateBaseNS;
         std::string onError;
         std::string onTrace;
         std::string onOpen;
@@ -145,7 +146,8 @@ namespace {
         bool isAutoIncrement;
         inline Module(const std::string& n)
             : name(n)
-            , generateBase("sqlch")
+            , generateBase(true)
+            , generateBaseNS("sqlch")
             , onError("on_Error")
             , onOpen("on_Open")
             , onOpened("on_Opened")
@@ -523,7 +525,11 @@ namespace {
             return true;
         }
         if(tokList.at(0) == "SQLCH") {
-            parser.module.generateBase = tokList.at(1);
+            parser.module.generateBase = (tokList.at(1) != "OFF");
+            return true;
+        }
+        if(tokList.at(0) == "SQLCH_NS") {
+            parser.module.generateBaseNS = tokList.at(1);
             return true;
         }
         if(tokList.at(0) == "DECSQL") {
@@ -538,7 +544,7 @@ namespace {
         if(tokList.at(0) == "ON") {
             auto what = tokList.at(1);
             auto func = tokList.at(2);
-            if(parser.module.generateBase == "OFF") {
+            if(parser.module.generateBase == false) {
                 std::cout << "Error:ON " << what << " cannot be defined when SQLCH is OFF" << std::endl;
                 exit(1);
             }
@@ -1011,7 +1017,7 @@ namespace {
     inline void Interface::generateInsert(const Statement& stmt, std::ostream& of_hdr, std::ostream& of_src, const std::string& ns) const {
         std::string sep;
 
-        of_hdr << "    " << module.generateBase << "::exstatement " << stmt.qname() << "_;" << std::endl;
+        of_hdr << "    " << module.generateBaseNS << "::exstatement " << stmt.qname() << "_;" << std::endl;
         if(module.isAutoIncrement){
             of_hdr << "    " << stmt.pktype() << " " << stmt.qname() << "(";
         }else{
@@ -1052,7 +1058,7 @@ namespace {
     inline void Interface::generateDelete(const Statement& stmt, std::ostream& of_hdr, std::ostream& of_src, const std::string& ns) const {
         std::string sep;
 
-        of_hdr << "    " << module.generateBase << "::exstatement " << stmt.qname() << "_;" << std::endl;
+        of_hdr << "    " << module.generateBaseNS << "::exstatement " << stmt.qname() << "_;" << std::endl;
         of_hdr << "    void " << stmt.qname() << "(";
         for(auto& v : stmt.varList) {
             of_hdr << sep << "const " << v.ntype << "& " << v.name;
@@ -1097,7 +1103,7 @@ namespace {
             rname = ns + sname;
         }
 
-        of_hdr << "    struct " << stmt.qname() << "_c : public " << module.generateBase << "::statement {" << std::endl;
+        of_hdr << "    struct " << stmt.qname() << "_c : public " << module.generateBaseNS << "::statement {" << std::endl;
         of_hdr << "      friend struct " << name << ";" << std::endl;
         if(sname == "row") {
             of_hdr << "      struct row {" << std::endl;
@@ -1107,7 +1113,7 @@ namespace {
             of_hdr << "      };" << std::endl;
         }
 
-        of_hdr << "      inline " << stmt.qname() << "_c(" << module.generateBase << "::database& pdb) : statement(pdb) {}" << std::endl;
+        of_hdr << "      inline " << stmt.qname() << "_c(" << module.generateBaseNS << "::database& pdb) : statement(pdb) {}" << std::endl;
         of_hdr << "    };" << std::endl;
         of_hdr << "    " << stmt.qname() << "_c " << stmt.qname() << "_;" << std::endl;
 
@@ -1130,7 +1136,7 @@ namespace {
         }
         of_src << ") {" << std::endl;
 
-        of_src << "  " << module.generateBase << "::guard lk(db.db);" << std::endl;
+        of_src << "  " << module.generateBaseNS << "::guard lk(db.db);" << std::endl;
         of_src << "  " << stmt.qname() << "_.reset();" << std::endl;
         for(auto& v : stmt.varList) {
             auto ctype = "(" + v.ctype + ")";
@@ -1169,10 +1175,10 @@ namespace {
     inline void Interface::generate(const Module& module, std::ostream& of_hdr, std::ostream& of_src, const std::string& ns) const {
         of_hdr << "  struct " << name << " {" << std::endl;
         if(isDB) {
-            of_hdr << "    " << module.generateBase << "::database db;" << std::endl;
+            of_hdr << "    " << module.generateBaseNS << "::database db;" << std::endl;
             of_hdr << "    std::string name;" << std::endl;
         } else {
-            of_hdr << "    typedef " << module.generateBase << "::pool<" << db.db().name << ", " << name << ">::guard guard;" << std::endl;
+            of_hdr << "    typedef " << module.generateBaseNS << "::pool<" << db.db().name << ", " << name << ">::guard guard;" << std::endl;
             of_hdr << "    " << db.db().name << "& db;" << std::endl;
         }
 
@@ -1241,7 +1247,7 @@ namespace {
             for (auto& db : module.dbList) {
                 for (auto& iface : db.interfaceList) {
                     if (!iface.isDB) {
-                        of_hdr << "    " << module.generateBase << "::pool<" << name << "," << iface.name << "> " << iface.name << "Pool;" << std::endl;
+                        of_hdr << "    " << module.generateBaseNS << "::pool<" << name << "," << iface.name << "> " << iface.name << "Pool;" << std::endl;
                     }
                 }
             }
@@ -1264,7 +1270,7 @@ namespace {
             of_src << "  }" << std::endl;
             of_src << "  db.create(filename, vfs);" << std::endl;
             of_src << "  db.exec(\"PRAGMA page_size = 4096;\");" << std::endl;
-            of_src << "  " << module.generateBase << "::transaction t(db);" << std::endl;
+            of_src << "  " << module.generateBaseNS << "::transaction t(db);" << std::endl;
             for(auto& s : stmtList) {
                 switch(s.action) {
                 case SQLITE_CREATE_TABLE:
@@ -1349,12 +1355,12 @@ namespace {
         of_src << std::endl;
 
         // HDR:generate declaration for common structs required by sqlch
-        if(module.generateBase != "OFF") {
+        if(module.generateBase != false) {
             // SQLCH_COMMON used is to ensure that the structs are not redefined when more than one
             // of the generated files are included in the same cpp file
             of_hdr << "#if !defined(SQLCH_COMMON)" << std::endl;
             of_hdr << "#define SQLCH_COMMON 1" << std::endl;
-            of_hdr << "namespace " << module.generateBase << " {" << std::endl;
+            of_hdr << "namespace " << module.generateBaseNS << " {" << std::endl;
             of_hdr << "  std::string error(sqlite3* db);" << std::endl;
             of_hdr << "  struct database;" << std::endl;
             of_hdr << "  struct statement {" << std::endl;
@@ -1393,7 +1399,7 @@ namespace {
             of_hdr << "  template <> inline std::string statement::getColumn<std::string>(const int& idx) { return getColumnText(idx); }" << std::endl;
             of_hdr << std::endl;
 
-            of_hdr << "  struct exstatement : public " << module.generateBase << "::statement {" << std::endl;
+            of_hdr << "  struct exstatement : public " << module.generateBaseNS << "::statement {" << std::endl;
             of_hdr << "    inline exstatement(database& db) : statement(db){}" << std::endl;
             of_hdr << "  };" << std::endl;
             of_hdr << std::endl;
@@ -1566,8 +1572,8 @@ namespace {
             of_hdr << std::endl;
             of_hdr << "#endif // !defined(SQLCH_COMMON)" << std::endl;
             of_hdr << std::endl;
-        } else if(module.generateBase != "OFF") {
-            of_hdr << "#include \"" << module.generateBase << "\"" << std::endl;
+        } else if(module.generateBase != false) {
+            of_hdr << "#include \"" << module.generateBaseNS << "\"" << std::endl;
         }
 
         // HDR:open namespace in header file
@@ -1604,7 +1610,7 @@ namespace {
         // SRC:generate definition for common structs required by sqlch
         // the ---SQLCH metacommand is used to ensure that it is defined only once
         // in the whole project
-        if(module.generateBase != "OFF") {
+        if(module.generateBase != false) {
             // SRC: generate code
             of_src << module.scode << std::endl;
             of_src << std::endl;
@@ -1628,12 +1634,12 @@ namespace {
                 of_src << std::endl;
             }
             if(module.onOpened == "on_Opened") {
-                of_src << "  inline void on_Opened(" << module.generateBase << "::database& /*db*/){" << std::endl;
+                of_src << "  inline void on_Opened(" << module.generateBaseNS << "::database& /*db*/){" << std::endl;
                 of_src << "  }" << std::endl;
                 of_src << std::endl;
             }
 
-            of_src << "  inline int getParamIndex(" << module.generateBase << "::statement& stmt, const std::string& key) {" << std::endl;
+            of_src << "  inline int getParamIndex(" << module.generateBaseNS << "::statement& stmt, const std::string& key) {" << std::endl;
             of_src << "    if (stmt.val_ == nullptr) {" << std::endl;
             of_src << "      " << module.onError << "(stmt.db_.filename_, \"get_index\", SQLITE_MISUSE, \"uninitialized statement\");" << std::endl;
             of_src << "    }" << std::endl;
@@ -1646,12 +1652,12 @@ namespace {
             of_src << "} // namespace" << std::endl;
             of_src << std::endl;
 
-            of_src << "  std::string " << module.generateBase << "::error(sqlite3* db){" << std::endl;
+            of_src << "  std::string " << module.generateBaseNS << "::error(sqlite3* db){" << std::endl;
             of_src << "    return ::sqlite3_errmsg(db);" << std::endl;
             of_src << "  }" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::database::open(const std::string& filename, const int& flags, const char* vfs){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::database::open(const std::string& filename, const int& flags, const char* vfs){" << std::endl;
             if (module.mutexName.length() > 0) {
                 of_src << "#if " << module.mutexName << std::endl;
                 of_src << "  ::sqlite3_config(SQLITE_CONFIG_SERIALIZED);" << std::endl;
@@ -1681,7 +1687,7 @@ namespace {
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::database::close(){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::database::close(){" << std::endl;
             of_src << "  if (val_) {" << std::endl;
             of_src << "    beginTx_.close();" << std::endl;
             of_src << "    commitTx_.close();" << std::endl;
@@ -1698,7 +1704,7 @@ namespace {
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::database::exec(const std::string& sqls){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::database::exec(const std::string& sqls){" << std::endl;
             of_src << "  char* err = nullptr;" << std::endl;
             of_src << "  int rc = sqlite3_exec(val_, sqls.c_str(), nullptr, nullptr, &err);" << std::endl;
             of_src << "  if (rc != SQLITE_OK) {" << std::endl;
@@ -1709,7 +1715,7 @@ namespace {
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::statement::open(const std::string& sql){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::statement::open(const std::string& sql){" << std::endl;
             of_src << "  if(db_.val_ == nullptr){" << std::endl;
             of_src << "    " << module.onError << "(db_.filename_, \"prepare\", SQLITE_MISUSE, \"[\" + sql + \"]:database not open\");" << std::endl;
             of_src << "    return;" << std::endl;
@@ -1722,7 +1728,7 @@ namespace {
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::statement::close(){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::statement::close(){" << std::endl;
             of_src << "  if (val_) {" << std::endl;
             of_src << "    ::sqlite3_reset(val_);" << std::endl;
             of_src << "    ::sqlite3_clear_bindings(val_);" << std::endl;
@@ -1732,7 +1738,7 @@ namespace {
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "bool " << module.generateBase << "::statement::next(){" << std::endl;
+            of_src << "bool " << module.generateBaseNS << "::statement::next(){" << std::endl;
             of_src << "  int rc = ::sqlite3_step(val_);" << std::endl;
             of_src << "  if ((rc > 0) && (rc < 100)) {" << std::endl;
             of_src << "    rc=" << module.onError << "(db_.filename_, \"next\", rc, error(db_.val_));" << std::endl;
@@ -1742,24 +1748,24 @@ namespace {
             of_src << std::endl;
 
             if(module.isAutoIncrement){
-                of_src << "uint64_t " << module.generateBase << "::statement::insert(){" << std::endl;
+                of_src << "uint64_t " << module.generateBaseNS << "::statement::insert(){" << std::endl;
                 of_src << "  next();" << std::endl;
                 of_src << "  return (uint64_t)::sqlite3_last_insert_rowid(db_.val_);" << std::endl;
                 of_src << "}" << std::endl;
                 of_src << std::endl;
             }else{
-                of_src << "void " << module.generateBase << "::statement::insert(){" << std::endl;
+                of_src << "void " << module.generateBaseNS << "::statement::insert(){" << std::endl;
                 of_src << "  next();" << std::endl;
                 of_src << "}" << std::endl;
                 of_src << std::endl;
             }
 
-            of_src << "void " << module.generateBase << "::statement::xdelete(){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::statement::xdelete(){" << std::endl;
             of_src << "  next();" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::statement::reset(){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::statement::reset(){" << std::endl;
             of_src << "  int rc = ::sqlite3_reset(val_);" << std::endl;
             of_src << "  if (rc != SQLITE_OK) {" << std::endl;
             of_src << "    " << module.onError << "(db_.filename_, \"reset\", rc, error(db_.val_));" << std::endl;
@@ -1767,36 +1773,36 @@ namespace {
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "size_t " << module.generateBase << "::statement::getColumnCount(){" << std::endl;
+            of_src << "size_t " << module.generateBaseNS << "::statement::getColumnCount(){" << std::endl;
             of_src << "  return static_cast<size_t>(::sqlite3_column_count(val_));" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::statement::setParamFloat(const std::string& key, const double& val){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::statement::setParamFloat(const std::string& key, const double& val){" << std::endl;
             of_src << "  int idx = getParamIndex(*this, key);" << std::endl;
             of_src << "  ::sqlite3_bind_double(val_, idx, val);" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "double " << module.generateBase << "::statement::getColumnFloat(const int& idx){" << std::endl;
+            of_src << "double " << module.generateBaseNS << "::statement::getColumnFloat(const int& idx){" << std::endl;
             of_src << "  double val = ::sqlite3_column_double(val_, idx);" << std::endl;
             of_src << "  return val;" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::statement::setParamLong(const std::string& key, const int64_t& val){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::statement::setParamLong(const std::string& key, const int64_t& val){" << std::endl;
             of_src << "  int idx = getParamIndex(*this, key);" << std::endl;
             of_src << "  ::sqlite3_bind_int64(val_, idx, val);" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "int64_t " << module.generateBase << "::statement::getColumnLong(const int& idx){" << std::endl;
+            of_src << "int64_t " << module.generateBaseNS << "::statement::getColumnLong(const int& idx){" << std::endl;
             of_src << "  int64_t val = ::sqlite3_column_int64(val_, idx);" << std::endl;
             of_src << "  return val;" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "void " << module.generateBase << "::statement::setParamText(const std::string& key, const std::string& val){" << std::endl;
+            of_src << "void " << module.generateBaseNS << "::statement::setParamText(const std::string& key, const std::string& val){" << std::endl;
             of_src << "  int idx = getParamIndex(*this, key);" << std::endl;
             of_src << "#pragma clang diagnostic push" << std::endl;
             of_src << "#pragma clang diagnostic ignored \"-Wold-style-cast\"" << std::endl;
@@ -1805,7 +1811,7 @@ namespace {
             of_src << "}" << std::endl;
             of_src << std::endl;
 
-            of_src << "std::string " << module.generateBase << "::statement::getColumnText(const int& idx){" << std::endl;
+            of_src << "std::string " << module.generateBaseNS << "::statement::getColumnText(const int& idx){" << std::endl;
             of_src << "  int len = ::sqlite3_column_bytes(val_, idx);" << std::endl;
             of_src << "  const void* valp = static_cast<const void*>(::sqlite3_column_text(val_, idx));" << std::endl;
             of_src << "  const char* val = static_cast<const char*>(valp);" << std::endl;
