@@ -675,10 +675,12 @@ namespace {
                 auto cn = c;
                 auto cit = parser.nmap.find(cn);
                 if(cit != parser.nmap.end()) {
-                    cn = cit->second;
+                    auto ntype = cit->second;
+                    s.addColumn(t, c, ntype, ntype, ntype, false);
+                }else {
+                    auto& col = parser.module.getColumnInfo(t, cn);
+                    s.addColumn(t, c, col.stype, col.ctype, col.ntype, col.is_pk);
                 }
-                auto& col = parser.module.getColumnInfo(t, cn);
-                s.addColumn(t, c, col.stype, col.ctype, col.ntype, col.is_pk);
                 if(s.tname.size() == 0) {
                     s.tname = t;
                 }
