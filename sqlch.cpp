@@ -670,7 +670,11 @@ namespace {
 
             int cc = sqlite3_column_count(cursor.stmt);
             for(int i = 0; i < cc; ++i) {
-                std::string t = sqlite3_column_table_name(cursor.stmt, i);
+                const char* tx = sqlite3_column_table_name(cursor.stmt, i);
+                std::string t;
+                if(tx != nullptr) {
+                    t = sqlite3_column_table_name(cursor.stmt, i);
+                }
                 std::string c = sqlite3_column_name(cursor.stmt, i);
                 auto cn = c;
                 auto cit = parser.nmap.find(cn);
@@ -1379,6 +1383,7 @@ namespace {
             of_hdr << "    void xdelete();" << std::endl;
             of_hdr << "    void reset();" << std::endl;
             of_hdr << "    size_t getColumnCount();" << std::endl;
+            of_hdr << "    int getColumnType(const size_t& idx);" << std::endl;
             of_hdr << "    void setParamFloat(const std::string& key, const double& val);" << std::endl;
             of_hdr << "    double getColumnFloat(const int& idx);" << std::endl;
             of_hdr << "    void setParamLong(const std::string& key, const int64_t& val);" << std::endl;
@@ -1777,6 +1782,11 @@ namespace {
 
             of_src << "size_t " << module.generateBaseNS << "::statement::getColumnCount(){" << std::endl;
             of_src << "  return static_cast<size_t>(::sqlite3_column_count(val_));" << std::endl;
+            of_src << "}" << std::endl;
+            of_src << std::endl;
+
+            of_src << "int " << module.generateBaseNS << "::statement::getColumnType(const size_t& idx){" << std::endl;
+            of_src << "  return ::sqlite3_column_type(val_, idx);" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
