@@ -1083,11 +1083,11 @@ namespace {
         of_src << ") {" << std::endl;
         of_src << "  " << stmt.qname() << "_.reset();" << std::endl;
         for(auto& v : stmt.varList) {
-            auto ctype = "(" + v.ctype + ")";
+            auto ctype = "static_cast<" + v.ctype + ">";
             if(v.ntype == v.ctype) {
                 ctype = "";
             }
-            of_src << "  " << stmt.qname() << "_.setParam<" << v.ctype << ">(\":" << v.name << "\", " << ctype << v.name << ");" << std::endl;
+            of_src << "  " << stmt.qname() << "_.setParam<" << v.ctype << ">(\":" << v.name << "\", " << ctype << "(" << v.name << ")" << ");" << std::endl;
         }
         of_src << "  " << stmt.qname() << "_.xdelete();" << std::endl;
         of_src << "}" << std::endl;
@@ -1145,11 +1145,11 @@ namespace {
         of_src << "  " << module.generateBaseNS << "::guard lk(db.db);" << std::endl;
         of_src << "  " << stmt.qname() << "_.reset();" << std::endl;
         for(auto& v : stmt.varList) {
-            auto ctype = "(" + v.ctype + ")";
+            auto ctype = "static_cast<" + v.ctype + ">";
             if(v.ntype == v.ctype) {
                 ctype = "";
             }
-            of_src << "  " << stmt.qname() << "_.setParam<" << v.ctype << ">(\":" << v.name << "\", " << ctype << v.name << ");" << std::endl;
+            of_src << "  " << stmt.qname() << "_.setParam<" << v.ctype << ">(\":" << v.name << "\", " << ctype << "(" << v.name << ")" << ");" << std::endl;
         }
         of_src << "  std::vector<" << rname << "> rv;" << std::endl;
         of_src << "  while(" << stmt.qname() << "_.next()){" << std::endl;
@@ -1786,7 +1786,7 @@ namespace {
             of_src << std::endl;
 
             of_src << "int " << module.generateBaseNS << "::statement::getColumnType(const size_t& idx){" << std::endl;
-            of_src << "  return ::sqlite3_column_type(val_, idx);" << std::endl;
+            of_src << "  return ::sqlite3_column_type(val_, static_cast<int>(idx));" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
 
@@ -1843,7 +1843,7 @@ namespace {
                 of_src << "    case " << ns << e.name << "::" << v << ": return \"" << v << "\";" << std::endl;
             }
             of_src << "  }" << std::endl;
-            of_src << "  return \"<UNKNOWN-ENUM:" << e.name << ">:\" + std::to_string((int)val);" << std::endl;
+            of_src << "  return \"<UNKNOWN-ENUM:" << e.name << ">:\" + std::to_string(static_cast<int>(val));" << std::endl;
             of_src << "}" << std::endl;
             of_src << std::endl;
         }
